@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>저녁 메뉴 추천 챗봇</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff8f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            background-color: #ff7043;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 24px;
+        }
+        #chatbox {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #fff0e1;
+            border-bottom: 2px solid #ff7043;
+        }
+        #chatbox .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        #chatbox .user {
+            text-align: right;
+            color: white;
+            background-color: #ff7043;
+            align-self: flex-end;
+            max-width: 60%;
+            border-radius: 10px 10px 0 10px;
+        }
+        #chatbox .bot {
+            text-align: left;
+            color: #333;
+            background-color: #ffe0b2;
+            align-self: flex-start;
+            max-width: 60%;
+            border-radius: 10px 10px 10px 0;
+        }
+        #inputArea {
+            display: flex;
+            padding: 10px;
+            background-color: #fff8f0;
+            border-top: 2px solid #ff7043;
+        }
+        #userInput {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid #ff7043;
+            border-radius: 20px;
+            font-size: 16px;
+            outline: none;
+        }
+        #sendButton {
+            padding: 10px 20px;
+            margin-left: 10px;
+            background-color: #ff7043;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        #sendButton:hover {
+            background-color: #e64a19;
+        }
+        #apiKeyInput {
+            padding: 10px;
+            border: 2px solid #ff7043;
+            border-radius: 20px;
+            font-size: 16px;
+            outline: none;
+            margin: 10px;
+        }
+        #setApiKeyButton {
+            padding: 10px 20px;
+            background-color: #ff7043;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        #setApiKeyButton:hover {
+            background-color: #e64a19;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        🍽 저녁 메뉴 추천 챗봇
+    </header>
+
+    <div id="apiKeyArea">
+        <input type="text" id="apiKeyInput" placeholder="API 키를 입력하세요" />
+        <button id="setApiKeyButton">API 키 설정</button>
+    </div>
+
+    <div id="chatbox"></div>
+
+    <div id="inputArea">
+        <input type="text" id="userInput" placeholder="먹고 싶은 음식을 말해보세요!" />
+        <button id="sendButton">추천받기</button>
+    </div>
+
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const setApiKeyButton = document.getElementById('setApiKeyButton');
+
+        // Load API key from local storage
+        let apiKey = localStorage.getItem('apiKey');
+        if (apiKey) {
+            apiKeyInput.value = apiKey; // Set input value if API key exists
+        }
+
+        // Save API key to local storage
+        setApiKeyButton.addEventListener('click', () => {
+            apiKey = apiKeyInput.value.trim();
+            if (apiKey) {
+                localStorage.setItem('apiKey', apiKey);
+                alert('API 키가 저장되었습니다.');
+            } else {
+                alert('API 키를 입력해 주세요.');
+            }
+        });
+
+        // Send button click event
+        sendButton.addEventListener('click', () => {
+            const userMessage = userInput.value.trim();
+            if (userMessage && apiKey) {
+                addMessage(userMessage, 'user');
+                userInput.value = '';
+                callOpenAIAPI(userMessage);
+            } else if (!apiKey) {
+                alert('먼저 API 키를 설정해 주세요.');
+            }
+        });
+
+        // Enter key event for sending message
+        userInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+
+        // Function to add a message to the chatbox
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender);
+            messageDiv.textContent = text;
+            chatbox.appendChild(messageDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        // Function to call OpenAI API
+        async function callOpenAIAPI(message) {
+            const apiUrl = 'https://api.openai.com/v1/chat/completions';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-3.5-turbo',
+                        messages: [{ role: 'user', content: message }],
+                        max_tokens: 100
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const botMessage = data.choices && data.choices[0] && data.choices[0].message.content.trim();
+                
+                if (botMessage) {
+                    addMessage(botMessage, 'bot');
+                } else {
+                    addMessage("Error: API 응답에서 메시지를 찾을 수 없습니다.", 'bot');
+                }
+
+            } catch (error) {
+                console.error('API 호출 중 오류 발생:', error);
+                addMessage(`Error: ${error.message}`, 'bot');
+            }
+        }
+    </script>
+
+</body>
+</html>
